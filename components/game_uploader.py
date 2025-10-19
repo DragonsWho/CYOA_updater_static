@@ -4,12 +4,8 @@ import logging
 from dotenv import load_dotenv
 from .api_helper import ApiHelper
 
-# --- ИСПРАВЛЕНО: logger определен на уровне модуля ---
 load_dotenv()
 logger = logging.getLogger(__name__)
-# ----------------------------------------------------
-
-ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif')
 
 class GameUploader:
     def __init__(self, api_helper: ApiHelper):
@@ -20,7 +16,6 @@ class GameUploader:
         self.tags_cache = {}
 
     def _load_caches(self):
-        """Загружает авторов и теги в кэш для быстрого доступа."""
         logger.info("Loading authors and tags into uploader cache.")
         try:
             authors = self.api_helper._get_all_records('authors')
@@ -34,7 +29,6 @@ class GameUploader:
             raise
 
     def _get_or_create_entity(self, name: str, entity_type: str):
-        """Создает или находит ID автора или тега."""
         cache = self.authors_cache if entity_type == 'authors' else self.tags_cache
         name_lower = name.lower()
 
@@ -46,8 +40,7 @@ class GameUploader:
             headers = {'Authorization': self.token}
             response = requests.post(
                 f'{self.base_url}/collections/{entity_type}/records',
-                headers=headers,
-                json={'name': name}
+                headers=headers, json={'name': name}
             )
             response.raise_for_status()
             new_entity = response.json()
@@ -64,8 +57,7 @@ class GameUploader:
             return None
 
     def _add_tag_to_custom_category(self, tag_id: str):
-        """Добавляет тег в категорию 'Custom' (ID жестко задан)."""
-        category_id = "phc2n4pqe7hxe36" # ID категории 'Custom'
+        category_id = "phc2n4pqe7hxe36"
         logger.info(f"Adding tag {tag_id} to 'Custom' category.")
         try:
             headers = {'Authorization': self.token}
@@ -77,78 +69,72 @@ class GameUploader:
                 current_tags.append(tag_id)
                 res_patch = requests.patch(
                     f'{self.base_url}/collections/tag_categories/records/{category_id}',
-                    headers=headers,
-                    json={'tags': current_tags}
+                    headers=headers, json={'tags': current_tags}
                 )
                 res_patch.raise_for_status()
                 logger.info(f"Successfully added tag {tag_id} to 'Custom' category.")
         except Exception as e:
             logger.error(f"Failed to add tag to category: {e}")
 
-    def upload_game(self, game_data: dict, game_folder_path: str):
-        """Загружает игру, ее описание и изображения в каталог."""
+    def upload_game(self, game_data: dict, processed_folder_path: str, base64_placeholder: str | None):
         if not self.authors_cache or not self.tags_cache:
             self._load_caches()
 
         logger.info(f"Preparing to upload game: '{game_data['title']}'")
         
-        author_ids = []
-        for author_name in game_data.get('author', ['Anonymous']):
-            author_id = self._get_or_create_entity(author_name, 'authors')
-            if author_id:
-                author_ids.append(author_id)
-        
-        tag_ids = []
-        for tag_name in game_data.get('tags', []):
-            tag_id = self._get_or_create_entity(tag_name, 'tags')
-            if tag_id:
-                tag_ids.append(tag_id)
+        author_ids = [self._get_or_create_entity(name, 'authors') for name in game_data.get('author', ['Anonymous'])]
+        tag_ids = [self._get_or_create_entity(name, 'tags') for name in game_data.get('tags', [])]
 
         form_data = {
             'title': game_data['title'],
             'description': game_data['description'],
             'img_or_link': 'img',
             'uploader': "mar1q123caruaaw",
-            'authors': author_ids,
-            'tags': tag_ids,
+            'authors': [id for id in author_ids if id],
+            'tags': [id for id in tag_ids if id],
         }
         
-        image_files = sorted([f for f in os.listdir(game_folder_path) if f.lower().endswith(ALLOWED_IMAGE_EXTENSIONS)])
-        if not image_files:
-            raise FileNotFoundError(f"No images found in {game_folder_path} to upload.")
-        
-        cover_image_path = os.path.join(game_folder_path, image_files[0])
+        if base64_placeholder:
+            form_data['image_base64'] = base64_placeholder
+            logger.info("Attaching base64 placeholder to the upload request.")
 
-        files_to_upload = {}
-        open_files = [] # Список для хранения открытых файловых дескрипторов
+        # --- ИЗМЕНЕНО: Ищем обложку и страницы раздельно ---
+        all_files = sorted(os.listdir(processed_folder_path))
+        
+        cover_filename = next((f for f in all_files if f.startswith('cover_')), None)
+        if not cover_filename:
+            raise FileNotFoundError("Processed cover file (starting with 'cover_') not found.")
+
+        # Страницы - это все файлы, НЕ начинающиеся с 'cover_'
+        page_filenames = [f for f in all_files if not f.startswith('cover_')]
+        if not page_filenames:
+            raise FileNotFoundError("No processed page files found.")
+        
+        cover_image_path = os.path.join(processed_folder_path, cover_filename)
+        logger.info(f"Found cover: {cover_filename}")
+        logger.info(f"Found {len(page_filenames)} pages to upload.")
+        # -----------------------------------------------------------
+        
+        open_files = [] 
         try:
             cover_file = open(cover_image_path, 'rb')
             open_files.append(cover_file)
-            files_to_upload['image'] = (os.path.basename(cover_image_path), cover_file)
             
-            for i, page_filename in enumerate(image_files):
-                page_path = os.path.join(game_folder_path, page_filename)
+            page_files_for_upload = []
+            for page_filename in page_filenames:
+                page_path = os.path.join(processed_folder_path, page_filename)
                 handle = open(page_path, 'rb')
                 open_files.append(handle)
-                # PocketBase ожидает несколько полей с одинаковым именем
-                files_to_upload[f'cyoa_pages[{i}]'] = (page_filename, handle)
+                page_files_for_upload.append(('cyoa_pages', (page_filename, handle)))
             
             headers = {'Authorization': self.token}
             logger.info(f"Sending POST request to create game record...")
             
-            # В requests для мульти-файлов нужно передавать список кортежей
-            final_files = []
-            for key, (filename, file_handle) in files_to_upload.items():
-                if 'cyoa_pages' in key:
-                    final_files.append(('cyoa_pages', (filename, file_handle)))
-                else:
-                    final_files.append((key, (filename, file_handle)))
+            final_files = [('image', (cover_filename, cover_file))] + page_files_for_upload
             
             response = requests.post(
                 f'{self.base_url}/collections/games/records',
-                headers=headers,
-                data=form_data,
-                files=final_files
+                headers=headers, data=form_data, files=final_files
             )
             
             logger.debug(f"API Response [{response.status_code}]: {response.text}")

@@ -22,19 +22,21 @@ Deliver your response in the following JSON structure:
 Tag selection requirements (mandatory adherence):
 • Rating: Select EXACTLY 1 tag (SFW, Ecchi, NSFW, Extreme).
 • Playtime: Select EXACTLY 1 tag based on page count (see below).
-• Interactivity: Always use "Static".
+• Interactivity: Always use "Static".    (“Static” CYOA in this case means saved as images. No need to label it any other way)
 • Status: Always use "Full".
 • POV: Select EXACTLY 1 tag.
 • Player Sexual Role: Select EXACTLY 1 tag.
 • Tone: Select 0-3 tags.
 • Gameplay: Select 1-4 tags.
 • Power Level: Select EXACTLY 1 tag.
-• Visual Style: Select EXACTLY 1 tag (use "Image Based" or others if style is very distinct).
+• Visual Style: Always use "Anime" 
 • Narrative Structure: Select EXACTLY 1 tag.
 • Language: Always use "English".
 • Setting: Select 0-3 tags.
 • Genre: Select 0-3 tags.
 • Kinks: Select 0-4 tags.
+
+
 
 For each tag, add a short comment like // <explanation> explaining its category and why it was chosen.
 If the game has themes not covered by standard tags, add appropriate custom tags. Do not create new tags for unique items or characters. Do create a tag for popular fandoms.

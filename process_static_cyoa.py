@@ -41,26 +41,31 @@ def setup_logging():
 NEW_GAMES_DIR = "New_Static_Games"
 PROCESSED_DIR = "Processed_Static_Games"
 ERRORED_DIR = "Errored_Static_Games"
+# --- ДОБАВЛЕНО: константа для расширений, чтобы избежать дублирования ---
+ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')
+
 
 def process_single_game(game_folder_path, image_processor, ocr, llm, uploader, authors_list, tags_list):
     """
-    Полный цикл обработки одной игры: ImageProcessing -> OCR -> LLM -> Upload.
-    Возвращает True в случае успеха, False в случае ошибки.
+    Полный цикл обработки одной игры: ImageProcessing -> OCR -> LLM -> Tag Correction -> Upload.
     """
     game_name = os.path.basename(game_folder_path)
     logger.info(f"--- Processing game: {game_name} ---")
     
     temp_processing_path = None
     try:
+        # --- ШАГ 0: Считаем количество страниц в исходной папке ---
+        page_count = len([f for f in os.listdir(game_folder_path) if f.lower().endswith(ALLOWED_IMAGE_EXTENSIONS)])
+        logger.info(f"Detected {page_count} pages in source folder.")
+        # ---------------------------------------------------------
+
         # 1. ОБРАБОТКА ИЗОБРАЖЕНИЙ
-        # --- ИСПРАВЛЕНО: Распаковываем результат в две переменные ---
         temp_processing_path, base64_placeholder = image_processor.process_game_folder(game_folder_path)
-        # -----------------------------------------------------------
         if not temp_processing_path:
             logger.error(f"Image processing failed for '{game_name}'. Skipping.")
             return False
 
-        # 2. Распознавание текста (теперь temp_processing_path - это строка)
+        # 2. Распознавание текста
         full_text = ocr.extract_text_from_folder(temp_processing_path)
         if not full_text:
             logger.error(f"Failed to extract text from '{game_name}'. Skipping.")
@@ -77,6 +82,29 @@ def process_single_game(game_folder_path, image_processor, ocr, llm, uploader, a
             logger.error(f"Failed to generate valid JSON from LLM for '{game_name}'. Skipping.")
             return False
 
+        # --- ШАГ 3.5: АВТОМАТИЧЕСКАЯ УСТАНОВКА ТЕГА PLAYTIME ---
+        playtime_tag = ""
+        if page_count == 1:
+            playtime_tag = "5min"
+        elif 2 <= page_count <= 5:
+            playtime_tag = "15min"
+        elif 6 <= page_count <= 13:
+            playtime_tag = "30min"
+        else:  # 14+ pages
+            playtime_tag = "60+min"
+        
+        logger.info(f"Automatically setting 'Playtime' tag to '{playtime_tag}' based on {page_count} pages.")
+        
+        # Удаляем любые старые теги времени и добавляем новый
+        current_tags = game_json.get('tags', [])
+        playtime_options = {"5min", "15min", "30min", "60+min"}
+        filtered_tags = [tag for tag in current_tags if tag not in playtime_options]
+        filtered_tags.append(playtime_tag)
+        
+        game_json['tags'] = filtered_tags
+        logger.info(f"Final tags for upload: {game_json['tags']}")
+        # ----------------------------------------------------------
+
         # 4. Загрузка игры в каталог
         uploader.upload_game(game_json, temp_processing_path, base64_placeholder)
         logger.info(f"Successfully uploaded '{game_name}' to the catalog.")
@@ -90,6 +118,7 @@ def process_single_game(game_folder_path, image_processor, ocr, llm, uploader, a
         if temp_processing_path and os.path.exists(temp_processing_path):
             shutil.rmtree(temp_processing_path)
             logger.info(f"Cleaned up temporary directory: {temp_processing_path}")
+
 
 def main():
     """Главная функция-оркестратор."""
@@ -152,6 +181,7 @@ def main():
     logger.info("==========================================")
     logger.info("=== Processing finished. See logs above. ===")
     logger.info("==========================================")
+
 
 if __name__ == "__main__":
     main()

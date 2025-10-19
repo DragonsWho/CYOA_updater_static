@@ -21,22 +21,19 @@ Deliver your response in the following JSON structure:
 
 Tag selection requirements (mandatory adherence):
 • Rating: Select EXACTLY 1 tag (SFW, Ecchi, NSFW, Extreme).
-• Playtime: Select EXACTLY 1 tag based on page count (see below).
-• Interactivity: Always use "Static".    (“Static” CYOA in this case means saved as images. No need to label it any other way)
+• Interactivity: Always use "Static".
 • Status: Always use "Full".
 • POV: Select EXACTLY 1 tag.
 • Player Sexual Role: Select EXACTLY 1 tag.
 • Tone: Select 0-3 tags.
 • Gameplay: Select 1-4 tags.
 • Power Level: Select EXACTLY 1 tag.
-• Visual Style: Always use "Anime" 
+• Visual Style: **IMPORTANT: DO NOT use the "Image Based" tag.** All games here are image-based by default. Select another relevant tag from this category if applicable.
 • Narrative Structure: Select EXACTLY 1 tag.
 • Language: Always use "English".
 • Setting: Select 0-3 tags.
 • Genre: Select 0-3 tags.
 • Kinks: Select 0-4 tags.
-
-
 
 For each tag, add a short comment like // <explanation> explaining its category and why it was chosen.
 If the game has themes not covered by standard tags, add appropriate custom tags. Do not create new tags for unique items or characters. Do create a tag for popular fandoms.
@@ -45,7 +42,6 @@ Total tags should not exceed 30.
 When responding, deliver your response strictly as the raw JSON content, without any wrappers like ```json or other text. The message must begin with {{ and end with }}.
 
 Clarifications on specific tags:
-- Playtime: Based on the number of pages. 1 pages = "5min"; 2-5 pages = "15min"; 6-10 pages = "30min"; 11+ pages = "60+min".
 - Rating: "NSFW" means explicit sex/nudity. "Ecchi" means erotic overtones without explicit acts. "SFW" means no sexual context. "Extreme" is for truly graphic, non-sexual violence or disturbing kinks.
 - Author: If you cannot determine the author from the text, use ["Anonymous"]. If there are multiple, list them like ["Author 1", "Author 2"]. Try to use an author from the known list if possible.
 

@@ -3,3 +3,4 @@ requests
 google-cloud-vision
 Pillow
 tqdm
+Flask

@@ -1,0 +1,5 @@
+python-dotenv
+requests
+google-cloud-vision
+Pillow
+tqdm

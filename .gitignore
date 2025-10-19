@@ -1,0 +1,46 @@
+# Виртуальное окружение
+venv/
+
+# Кэш Python
+__pycache__/
+
+# Секреты
+.env
+gcp-credentials.json 
+
+# База данных и сгенерированные индексы
+*.db
+*.index
+*.json
+*.jsonl
+
+temp_indexer_vertex.py
+
+111_summarize_project.py
+111_project_summary.txt
+OTHER/
+
+
+# Лог-файлы
+*.log
+
+todo
+
+semantic-search-deploy/
+
+
+# Environments
+.env
+.venv/
+venv/
+__pycache__/
+
+# Logs and data
+logs/
+New_Static_Games/
+Processed_Static_Games/
+Errored_Static_Games/
+*.json
+
+# Credentials
+credentials.json

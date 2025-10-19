@@ -1,8 +1,11 @@
+# components/api_helper.py
+
 import os
 import json
 import requests
 import logging
 from dotenv import load_dotenv
+from urllib.parse import quote
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -55,6 +58,46 @@ class ApiHelper:
                 break
             page += 1
         return all_items
+
+    # --- НОВАЯ ФУНКЦИЯ ---
+    def check_game_exists_by_title(self, game_title: str) -> bool:
+        """Проверяет, существует ли игра с таким же названием в базе данных."""
+        if not self.token:
+            self.login()
+
+        logger.info(f"Checking if game '{game_title}' already exists...")
+        headers = {'Authorization': self.token}
+        
+        # Pocketbase использует фильтр в URL. Важно правильно экранировать кавычки.
+        # Запрашиваем только 1 запись, нам не нужны все данные.
+        params = {
+            'perPage': 1,
+            'filter': f'title="{game_title}"'
+        }
+        
+        try:
+            response = requests.get(
+                f'{self.base_url}/collections/games/records',
+                headers=headers,
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # Если totalItems > 0, значит игра найдена
+            if data.get('totalItems', 0) > 0:
+                logger.warning(f"Found existing game with title: '{game_title}'")
+                return True
+            else:
+                logger.info(f"No game found with title: '{game_title}'. It's a new game.")
+                return False
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API error while checking for game existence: {e}")
+            # В случае ошибки API, лучше предположить, что игры нет, чтобы не остановить процесс.
+            # Но можно изменить логику, если требуется более строгое поведение.
+            return False
+    # --------------------
 
     def get_authors_list_str(self) -> str:
         """Получает всех авторов и возвращает отсортированный список в виде строки."""

@@ -40,6 +40,7 @@ logs/
 New_Static_Games/
 Processed_Static_Games/
 Errored_Static_Games/
+Already_Exists/
 *.json
 
 # Credentials

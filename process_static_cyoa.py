@@ -1,3 +1,5 @@
+# process_static_cyoa.py
+
 import os
 import sys
 import shutil
@@ -41,35 +43,35 @@ def setup_logging():
 NEW_GAMES_DIR = "New_Static_Games"
 PROCESSED_DIR = "Processed_Static_Games"
 ERRORED_DIR = "Errored_Static_Games"
-# --- ДОБАВЛЕНО: константа для расширений, чтобы избежать дублирования ---
+ALREADY_EXISTS_DIR = "Already_Exists" # --- ДОБАВЛЕНО: Новая папка ---
 ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')
 
 
-def process_single_game(game_folder_path, image_processor, ocr, llm, uploader, authors_list, tags_list):
+# --- ИЗМЕНЕНО: Добавлен api_helper и возвращаемое значение ---
+def process_single_game(game_folder_path, api_helper, image_processor, ocr, llm, uploader, authors_list, tags_list) -> str:
     """
-    Полный цикл обработки одной игры: ImageProcessing -> OCR -> LLM -> Tag Correction -> Upload.
+    Полный цикл обработки одной игры.
+    Возвращает статус: 'success', 'skipped', 'error'.
     """
     game_name = os.path.basename(game_folder_path)
     logger.info(f"--- Processing game: {game_name} ---")
     
     temp_processing_path = None
     try:
-        # --- ШАГ 0: Считаем количество страниц в исходной папке ---
         page_count = len([f for f in os.listdir(game_folder_path) if f.lower().endswith(ALLOWED_IMAGE_EXTENSIONS)])
         logger.info(f"Detected {page_count} pages in source folder.")
-        # ---------------------------------------------------------
 
         # 1. ОБРАБОТКА ИЗОБРАЖЕНИЙ
         temp_processing_path, base64_placeholder = image_processor.process_game_folder(game_folder_path)
         if not temp_processing_path:
             logger.error(f"Image processing failed for '{game_name}'. Skipping.")
-            return False
+            return 'error'
 
         # 2. Распознавание текста
         full_text = ocr.extract_text_from_folder(temp_processing_path)
         if not full_text:
             logger.error(f"Failed to extract text from '{game_name}'. Skipping.")
-            return False
+            return 'error'
 
         # 3. Генерация JSON через LLM
         game_json = llm.generate_game_json(
@@ -80,9 +82,20 @@ def process_single_game(game_folder_path, image_processor, ocr, llm, uploader, a
         )
         if not game_json:
             logger.error(f"Failed to generate valid JSON from LLM for '{game_name}'. Skipping.")
-            return False
+            return 'error'
+        
+        # --- НОВЫЙ ШАГ: ПРОВЕРКА НА СУЩЕСТВОВАНИЕ ---
+        title_to_check = game_json.get('title')
+        if not title_to_check:
+            logger.error(f"LLM did not provide a title for '{game_name}'. Skipping.")
+            return 'error'
+            
+        if api_helper.check_game_exists_by_title(title_to_check):
+            # Если игра существует, прекращаем обработку и возвращаем статус 'skipped'
+            return 'skipped'
+        # ----------------------------------------------
 
-        # --- ШАГ 3.5: АВТОМАТИЧЕСКАЯ УСТАНОВКА ТЕГА PLAYTIME ---
+        # 3.5. АВТОМАТИЧЕСКАЯ УСТАНОВКА ТЕГА PLAYTIME
         playtime_tag = ""
         if page_count == 1:
             playtime_tag = "5min"
@@ -90,12 +103,11 @@ def process_single_game(game_folder_path, image_processor, ocr, llm, uploader, a
             playtime_tag = "15min"
         elif 6 <= page_count <= 13:
             playtime_tag = "30min"
-        else:  # 14+ pages
+        else:
             playtime_tag = "60+min"
         
         logger.info(f"Automatically setting 'Playtime' tag to '{playtime_tag}' based on {page_count} pages.")
         
-        # Удаляем любые старые теги времени и добавляем новый
         current_tags = game_json.get('tags', [])
         playtime_options = {"5min", "15min", "30min", "60+min"}
         filtered_tags = [tag for tag in current_tags if tag not in playtime_options]
@@ -103,16 +115,15 @@ def process_single_game(game_folder_path, image_processor, ocr, llm, uploader, a
         
         game_json['tags'] = filtered_tags
         logger.info(f"Final tags for upload: {game_json['tags']}")
-        # ----------------------------------------------------------
 
         # 4. Загрузка игры в каталог
         uploader.upload_game(game_json, temp_processing_path, base64_placeholder)
         logger.info(f"Successfully uploaded '{game_name}' to the catalog.")
-        return True
+        return 'success'
     
     except Exception as e:
         logger.error(f"An error occurred in the processing pipeline for '{game_name}': {e}", exc_info=True)
-        return False
+        return 'error'
     
     finally:
         if temp_processing_path and os.path.exists(temp_processing_path):
@@ -126,10 +137,11 @@ def main():
     setup_logging()
     
     logger.info("==============================================")
-    logger.info("=== CYOA Static Game Processor v1.0 Started ===")
+    logger.info("=== CYOA Static Game Processor v1.1 Started ===") # Версия обновлена
     logger.info("==============================================")
 
-    for dir_path in [NEW_GAMES_DIR, PROCESSED_DIR, ERRORED_DIR]:
+    # --- ИЗМЕНЕНО: Добавлена новая папка ---
+    for dir_path in [NEW_GAMES_DIR, PROCESSED_DIR, ERRORED_DIR, ALREADY_EXISTS_DIR]:
         os.makedirs(dir_path, exist_ok=True)
 
     try:
@@ -162,13 +174,25 @@ def main():
 
     for game_path in tqdm(games_to_process, desc="Overall Progress"):
         try:
-            success = process_single_game(
-                game_path, image_processor, ocr_extractor, llm_handler, game_uploader, authors_list_str, tags_list_json
+            # --- ИЗМЕНЕНО: передаем api_helper и получаем статус ---
+            status = process_single_game(
+                game_path, api_helper, image_processor, ocr_extractor, llm_handler, game_uploader, authors_list_str, tags_list_json
             )
             
-            destination_dir = PROCESSED_DIR if success else ERRORED_DIR
+            # --- ИЗМЕНЕНО: Логика перемещения папки ---
+            destination_dir = None
+            if status == 'success':
+                destination_dir = PROCESSED_DIR
+                log_message = f"Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'."
+            elif status == 'skipped':
+                destination_dir = ALREADY_EXISTS_DIR
+                log_message = f"Game already exists. Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'."
+            else: # 'error' или любой другой случай
+                destination_dir = ERRORED_DIR
+                log_message = f"Error processing. Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'."
+            
             shutil.move(game_path, os.path.join(destination_dir, os.path.basename(game_path)))
-            logger.info(f"Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'.")
+            logger.info(log_message)
 
         except Exception as e:
             logger.critical(f"An unhandled exception occurred while processing {os.path.basename(game_path)}: {e}", exc_info=True)

@@ -973,7 +973,10 @@
                 <h2 class="box-title langText KOR">Load Recent Profile</h2>
             </div>
             <div class="box" style="flex: 0 calc(50% - 20px);">
-                <h2 class="box-title langText KOR" style="text-align: left; padding: 0 5%;">All Random</h2>
+                <h2 class="box-title langText KOR" style="text-align: left; padding: 0 5%;"><i><span id="charLoadLog"></span></i></h2>
+            </div>
+            <div class="box button button2" id="charLoad" style="flex: 0 calc(20% - 20px);" onclick="randomAll();">
+                <h2 class="box-title langText KOR">All Random</h2><h2 class="box-title langText ENG">All Random</h2>
             </div>
 
             <div class="box" style="flex: 0 calc(100% - 20px);">
@@ -1258,7 +1261,7 @@
                             Classes are distinguished based on the tactics used in combat and the position within a party.<br>
                             Among them, the following four types are representative:<br>
                             <br>
-                            <span class="2ndDisappear">※ In the first playthrough, you can only choose Warrior.</span>
+                            <span class="2ndDisappear">※ Only the Warrior role is available during your first playthrough.</span>
                         </span>
                     </p>
                 </div>
@@ -2339,7 +2342,47 @@
     <div id="info-tab">
         <div class="enemyInfo">
             <div class="box" style="flex: 0 calc(100% - 20px);">
-                <h2 class="box-title langText KOR" id="round" style="font-size: 3vh; font-weight: normal; font-family: 'Jua', sans-serif;">Champion's Action</h2>
+                <h2 class="box-title langText KOR" id="round" style="font-size: 3vh; font-weight: normal; font-family: 'Jua', sans-serif;"></h2>
+            </div>
+            <div class="box-img portraitBattle" id="enemyPortrait">
+                <div class="filter"></div>
+                <img src="image/no_image.webp" onerror="handleImgError(this)" alt="">
+            </div>
+            <div class="container">
+                <p style="flex: 0 calc(50% - 20px); margin:0 auto; font-size: 2.5vh; text-align: center;"><span class="langText KOR">흥분</span><span class="langText ENG">Excitement</span>: <span id="enemyExcite" class="number">0</span> <span class="number">/</span> <span id="enemyExciteL" class="number" onmouseenter="displayTooltip(event, 'enemy.exciteL');" onmouseleave="hideTooltip();">5</span></p>
+                <p style="flex: 0 calc(50% - 20px); margin:0 auto; font-size: 2.5vh; text-align: center;"><span class="langText KOR">절정</span><span class="langText ENG">Climax</span>: <span id="enemyOrgasm" class="number">0</span> <span class="number">/</span> <span id="enemyOrgasmL" class="number" onmouseenter="displayTooltip(event, 'enemy.orgasmL');" onmouseleave="hideTooltip();">5</span></p>
+            </div>
+        </div>
+        <div class="container stats" style="justify-content: space-evenly;">
+            <div class="box" style="flex: 0 calc(30% - 20px); margin:0 auto; font-size: 3vh; margin: 0 0% 0 0%; padding: 0; text-align: center;"><span class="langText KOR">음란</span><span class="langText ENG">Lewdness</span></div>
+            <p id="lewd" class="number" style="flex: 0 calc(10% - 20px); margin:0 auto; font-size: 3vh; margin: 0; padding: 0; text-align: center;" onmouseenter="displayTooltip(event, 'lewd');" onmouseleave="hideTooltip();">2</p>
+            <div class="box" style="flex: 0 calc(30% - 20px); margin:0 auto; font-size: 3vh; margin: 0 0% 0 10%; padding: 0; text-align: center;"><span class="langText KOR">발정</span><span class="langText ENG">Estrus</span></div>
+            <p id="estrus" class="number" style="flex: 0 calc(10% - 20px); margin:0 auto; font-size: 3vh; margin: 0; padding: 0; text-align: center;" onmouseenter="displayTooltip(event, 'estrus');" onmouseleave="hideTooltip();">2</p>
+        </div>
+        <div class="playerInfo">
+            <div class="box-img portraitBattle" id="playerPortrait">
+                <div class="filter"></div>
+                <img src="image/no_image.webp" onerror="handleImgError(this)" alt="">
+                <img id="playerClothes" class="clothes" src="image/no_image.webp" onerror="handleImgError(this)" alt="">
+            </div>
+            <div class="container">
+                <p style="flex: 0 calc(50% - 20px); margin:0 auto; font-size: 2.5vh; text-align: center;"><span class="langText KOR">흥분</span><span class="langText ENG">Excitement</span>: <span id="playerExcite" class="number">0</span> <span class="number">/</span> <span id="playerExciteL" class="number" onmouseenter="displayTooltip(event, 'player.exciteL');" onmouseleave="hideTooltip();">5</span></p>
+                <p style="flex: 0 calc(50% - 20px); margin:0 auto; font-size: 2.5vh; text-align: center;"><span class="langText KOR">절정</span><span class="langText ENG">Climax</span>: <span id="playerOrgasm" class="number">0</span> <span class="number">/</span> <span id="playerOrgasmL" class="number" onmouseenter="displayTooltip(event, 'player.orgasmL');" onmouseleave="hideTooltip();">5</span></p>
+            </div>
+            <div class="container">
+                <p id="viewPosture" style="margin:0 auto; font-size: 2vh; text-align: center;"><span class="langText KOR">체위</span><span class="langText ENG">Position</span>: <span id="posture"></span></p>
+                <p id="viewLust" style="display: none; margin:0 auto; font-size: 2vh; text-align: center;"><span class="langText KOR">욕망</span><span class="langText ENG">Lust</span>: <span id="lust" class="number">0</span></p>
+                <p id="viewWetness" style="display: none; margin:0 auto; font-size: 2vh; text-align: center;"><span class="langText KOR">젖음</span><span class="langText ENG">Wetness</span>: <span id="wetness" class="number">0</span></p>
+                <p id="viewSBlock" style="display: none; margin:0 auto; font-size: 2vh; text-align: center;"><span class="langText KOR">감각차단</span><span class="langText ENG">Sensation Block</span>: <span id="sBlock" class="number">0</span></p>
+                <p id="viewCorrupt" style="display: none; margin:0 auto; font-size: 2vh; text-align: center;"><span class="langText KOR">타락</span><span class="langText ENG">Corruption</span>: <span id="corrupt" class="number">0</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <div class="container battleContent turnContent cardList" id="enemyAction" style="display: none;">
+            <div class="box" style="flex: 0 calc(100% - 20px);">
+                <h2 class="box-title langText KOR">챔피언의 행동</h2><h2 class="box-title langText ENG">Champion's Action</h2>
             </div>
         </div>
         <div class="container battleContent turnContent cardList" id="enemyState" style="display: none;">
@@ -2349,7 +2392,17 @@
         </div>
         <!--<div class="container battleContent cardList" id="enemyRecord" style="display: none;">
             <div class="box" style="flex: 0 calc(100% - 20px);">
-                <h2 class="box-title langText KOR">Your Deck</h2>
+                <h2 class="box-title langText KOR">챔피언의 기록</h2>
+            </div>
+        </div>-->
+
+        <div class="container battleContent cardList" id="useActions" style="display: none; width:100%; height: 80vh; overflow-x: scroll; justify-content: flex-start; align-items: center; flex-wrap: nowrap;">
+        </div>
+
+        <div style="width:100%; height:80px;"></div>
+        <div class="container battleContent turnContent cardList" id="playerDeck" style="display: none;">
+            <div class="box" style="flex: 0 calc(100% - 20px);">
+                <h2 class="box-title langText KOR">당신의 덱</h2><h2 class="box-title langText ENG">Your Deck</h2>
             </div>
         </div>
         <div class="container battleContent turnContent cardList" id="playerState" style="display: none;">
@@ -2359,7 +2412,19 @@
         </div>
         <!--<div class="container battleContent cardList" id="playerRecord" style="display: none;">
             <div class="box" style="flex: 0 calc(100% - 20px);">
-                <h2 class="box-title langText KOR">Champion</h2>
+                <h2 class="box-title langText KOR">당신의 기록</h2>
+            </div>
+        </div>-->
+        <div style="width:100%; height:20vh;"></div>
+    </div>
+
+    <div id="message-wrapper">
+        <div id="message" class="box"></div>
+    </div>
+
+    <div id="button-tab">
+        <div class="buttons top">
+            <h2 class="box-title langText KOR" style="font-size: 3vh;">챔피언</h2><h2 class="box-title langText ENG" style="font-size: 3vh;">Champion</h2>
             <div class="box button battleButton active disabled" id="enemyActionButton" style="flex: 0 calc(100% - 20px); margin:0 auto; text-align: center;">
                 <p class="langText KOR">Champion's Action</p>
             </div>

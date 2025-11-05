@@ -1,3 +1,5 @@
+# components/game_uploader.py
+
 import os
 import requests
 import logging

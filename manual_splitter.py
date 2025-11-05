@@ -1,3 +1,5 @@
+# manual_splitter.py
+
 import sys
 import os
 import base64

@@ -1,5 +1,3 @@
-# process_static_cyoa.py
-
 import os
 import sys
 import shutil
@@ -7,6 +5,7 @@ import logging
 import json
 from dotenv import load_dotenv
 from tqdm import tqdm
+from rapidfuzz import fuzz # --- ДОБАВЛЕНО: Импорт для нечеткого сравнения ---
 
 from components.ocr_extractor import OCRExtractor
 from components.api_helper import ApiHelper
@@ -43,12 +42,11 @@ def setup_logging():
 NEW_GAMES_DIR = "New_Static_Games"
 PROCESSED_DIR = "Processed_Static_Games"
 ERRORED_DIR = "Errored_Static_Games"
-ALREADY_EXISTS_DIR = "Already_Exists" # --- ДОБАВЛЕНО: Новая папка ---
+ALREADY_EXISTS_DIR = "Already_Exists"
 ALLOWED_IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')
 
 
-# --- ИЗМЕНЕНО: Добавлен api_helper и возвращаемое значение ---
-def process_single_game(game_folder_path, api_helper, image_processor, ocr, llm, uploader, authors_list, tags_list) -> str:
+def process_single_game(game_folder_path, api_helper, image_processor, ocr, llm, uploader, authors_list, tags_list, all_game_titles) -> str:
     """
     Полный цикл обработки одной игры.
     Возвращает статус: 'success', 'skipped', 'error'.
@@ -84,16 +82,45 @@ def process_single_game(game_folder_path, api_helper, image_processor, ocr, llm,
             logger.error(f"Failed to generate valid JSON from LLM for '{game_name}'. Skipping.")
             return 'error'
         
-        # --- НОВЫЙ ШАГ: ПРОВЕРКА НА СУЩЕСТВОВАНИЕ ---
         title_to_check = game_json.get('title')
         if not title_to_check:
             logger.error(f"LLM did not provide a title for '{game_name}'. Skipping.")
             return 'error'
             
+        # --- ШАГ 3.1: ПРОВЕРКА НА ТОЧНОЕ СОВПАДЕНИЕ (быстрая проверка) ---
         if api_helper.check_game_exists_by_title(title_to_check):
-            # Если игра существует, прекращаем обработку и возвращаем статус 'skipped'
             return 'skipped'
-        # ----------------------------------------------
+        
+        # --- ШАГ 3.2: НОВАЯ ПРОВЕРКА НА ПОХОЖИЕ НАЗВАНИЯ ---
+        SIMILARITY_THRESHOLD = 85  # Порог схожести в процентах (можно настроить)
+        similar_titles = []
+        for existing_title in all_game_titles:
+            # Используем token_set_ratio, он хорошо работает с разным порядком слов и лишними словами
+            score = fuzz.token_set_ratio(title_to_check, existing_title)
+            if score >= SIMILARITY_THRESHOLD:
+                similar_titles.append(f"'{existing_title}' (Score: {score}%)")
+        
+        if similar_titles:
+            # Используем ANSI-коды для выделения цветом в терминале
+            YELLOW = '\033[93m'
+            RESET = '\033[0m'
+            print(f"\n{YELLOW}!!! ВНИМАНИЕ: Найдены похожие названия в каталоге !!!{RESET}")
+            print(f"  Сгенерированное название: '{title_to_check}'")
+            print(f"  Похожие существующие игры:")
+            for s_title in similar_titles:
+                print(f"    - {s_title}")
+            
+            while True:
+                user_input = input(f"  Продолжить загрузку? (y/n): ").lower()
+                if user_input in ['y', 'yes']:
+                    logger.warning(f"User approved upload despite similar titles: {similar_titles}")
+                    break # Выходим из цикла и продолжаем обработку
+                elif user_input in ['n', 'no']:
+                    logger.warning(f"User cancelled upload for '{title_to_check}' due to similarity check.")
+                    return 'skipped' # Прерываем обработку, игра будет перемещена в Already_Exists
+                else:
+                    print("  Неверный ввод. Пожалуйста, введите 'y' или 'n'.")
+        # -----------------------------------------------------------
 
         # 3.5. АВТОМАТИЧЕСКАЯ УСТАНОВКА ТЕГА PLAYTIME
         playtime_tag = ""
@@ -119,6 +146,10 @@ def process_single_game(game_folder_path, api_helper, image_processor, ocr, llm,
         # 4. Загрузка игры в каталог
         uploader.upload_game(game_json, temp_processing_path, base64_placeholder)
         logger.info(f"Successfully uploaded '{game_name}' to the catalog.")
+        
+        # --- ДОБАВЛЕНО: Обновляем наш локальный список названий, чтобы не споткнуться о ту же игру в этой же сессии ---
+        all_game_titles.append(title_to_check)
+        
         return 'success'
     
     except Exception as e:
@@ -137,10 +168,9 @@ def main():
     setup_logging()
     
     logger.info("==============================================")
-    logger.info("=== CYOA Static Game Processor v1.1 Started ===") # Версия обновлена
+    logger.info("=== CYOA Static Game Processor v1.2 Started ===")
     logger.info("==============================================")
 
-    # --- ИЗМЕНЕНО: Добавлена новая папка ---
     for dir_path in [NEW_GAMES_DIR, PROCESSED_DIR, ERRORED_DIR, ALREADY_EXISTS_DIR]:
         os.makedirs(dir_path, exist_ok=True)
 
@@ -160,8 +190,11 @@ def main():
         
     authors_list_str = api_helper.get_authors_list_str()
     tags_list_json = api_helper.get_tags_list_json()
-    if not authors_list_str or not tags_list_json:
-        logger.error("Could not fetch authors or tags list. Aborting.")
+    # --- ДОБАВЛЕНО: Загружаем список всех названий один раз ---
+    all_game_titles = api_helper.get_all_game_titles()
+    
+    if not authors_list_str or not tags_list_json or all_game_titles is None:
+        logger.error("Could not fetch initial data (authors, tags, or game titles). Aborting.")
         return
 
     games_to_process = [d.path for d in os.scandir(NEW_GAMES_DIR) if d.is_dir()]
@@ -174,19 +207,17 @@ def main():
 
     for game_path in tqdm(games_to_process, desc="Overall Progress"):
         try:
-            # --- ИЗМЕНЕНО: передаем api_helper и получаем статус ---
             status = process_single_game(
-                game_path, api_helper, image_processor, ocr_extractor, llm_handler, game_uploader, authors_list_str, tags_list_json
+                game_path, api_helper, image_processor, ocr_extractor, llm_handler, game_uploader, authors_list_str, tags_list_json, all_game_titles
             )
             
-            # --- ИЗМЕНЕНО: Логика перемещения папки ---
             destination_dir = None
             if status == 'success':
                 destination_dir = PROCESSED_DIR
                 log_message = f"Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'."
             elif status == 'skipped':
                 destination_dir = ALREADY_EXISTS_DIR
-                log_message = f"Game already exists. Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'."
+                log_message = f"Game exists or was skipped by user. Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'."
             else: # 'error' или любой другой случай
                 destination_dir = ERRORED_DIR
                 log_message = f"Error processing. Moved source folder '{os.path.basename(game_path)}' to '{destination_dir}'."

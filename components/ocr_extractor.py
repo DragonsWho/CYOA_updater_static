@@ -1,3 +1,5 @@
+# components/ocr_extractor.py
+
 import os
 from google.cloud import vision
 import logging

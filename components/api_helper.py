@@ -1,5 +1,3 @@
-# components/api_helper.py
-
 import os
 import json
 import requests
@@ -33,7 +31,7 @@ class ApiHelper:
             logger.error(f"API login failed: {e}")
             return False
 
-    def _get_all_records(self, collection_name: str):
+    def _get_all_records(self, collection_name: str, fields: str = None):
         """Вспомогательная функция для получения всех записей из коллекции с пагинацией."""
         if not self.token:
             raise Exception("Not authenticated. Call login() first.")
@@ -41,13 +39,18 @@ class ApiHelper:
         headers = {'Authorization': self.token}
         all_items = []
         page = 1
-        per_page = 500  # Увеличим для скорости
+        per_page = 500
         
+        params = {'page': page, 'perPage': per_page}
+        if fields:
+            params['fields'] = fields # Добавляем параметр fields, если он указан
+            
         while True:
+            params['page'] = page
             response = requests.get(
                 f'{self.base_url}/collections/{collection_name}/records',
                 headers=headers,
-                params={'page': page, 'perPage': per_page}
+                params=params
             )
             response.raise_for_status()
             data = response.json()
@@ -59,7 +62,6 @@ class ApiHelper:
             page += 1
         return all_items
 
-    # --- НОВАЯ ФУНКЦИЯ ---
     def check_game_exists_by_title(self, game_title: str) -> bool:
         """Проверяет, существует ли игра с таким же названием в базе данных."""
         if not self.token:
@@ -68,8 +70,6 @@ class ApiHelper:
         logger.info(f"Checking if game '{game_title}' already exists...")
         headers = {'Authorization': self.token}
         
-        # Pocketbase использует фильтр в URL. Важно правильно экранировать кавычки.
-        # Запрашиваем только 1 запись, нам не нужны все данные.
         params = {
             'perPage': 1,
             'filter': f'title="{game_title}"'
@@ -84,7 +84,6 @@ class ApiHelper:
             response.raise_for_status()
             data = response.json()
             
-            # Если totalItems > 0, значит игра найдена
             if data.get('totalItems', 0) > 0:
                 logger.warning(f"Found existing game with title: '{game_title}'")
                 return True
@@ -94,10 +93,20 @@ class ApiHelper:
 
         except requests.exceptions.RequestException as e:
             logger.error(f"API error while checking for game existence: {e}")
-            # В случае ошибки API, лучше предположить, что игры нет, чтобы не остановить процесс.
-            # Но можно изменить логику, если требуется более строгое поведение.
             return False
-    # --------------------
+
+    def get_all_game_titles(self) -> list[str] | None:
+        """Получает список названий всех игр в каталоге."""
+        logger.info("Fetching all game titles for similarity check...")
+        try:
+            # Запрашиваем только поле 'title' для экономии трафика и памяти
+            games_data = self._get_all_records('games', fields='title')
+            titles = [game['title'] for game in games_data]
+            logger.info(f"Fetched {len(titles)} game titles from the catalog.")
+            return titles
+        except Exception as e:
+            logger.error(f"Failed to get all game titles: {e}", exc_info=True)
+            return None
 
     def get_authors_list_str(self) -> str:
         """Получает всех авторов и возвращает отсортированный список в виде строки."""

@@ -1,3 +1,5 @@
+# components/image_processor.py
+
 import os
 import sys
 import math
